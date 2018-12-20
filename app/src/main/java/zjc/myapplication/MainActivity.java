@@ -6,11 +6,14 @@ import android.app.Activity;
 import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Build;
+import android.os.Looper;
 import android.support.annotation.RequiresApi;
 import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.support.v7.widget.DefaultItemAnimator;
@@ -33,6 +36,7 @@ import android.widget.Toast;
 
 import com.jude.easyrecyclerview.EasyRecyclerView;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -60,7 +64,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         getSupportActionBar().hide();
-        ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.SEND_SMS} , -1);
+        ActivityCompat.requestPermissions(this,new String[]{Manifest.permission.SEND_SMS} , 1);
         init();
     }
 
@@ -89,23 +93,44 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     /**
      * 获取 excel 表格中的数据,不能在主线程中调用
      */
-    private ArrayList<Person> getXlsData(String filePath, int index) {
-        ArrayList<Person> persons = new ArrayList<>();
-        try {
-            InputStream is = new FileInputStream(filePath);
-            Workbook workbook = Workbook.getWorkbook(is);
-            Sheet sheet = workbook.getSheet(index);
-            int sheetRows = sheet.getRows();
-            for (int i = 0; i < sheetRows; i++) {
-                Person person = new Person();
-                person.setUserName(sheet.getCell(0, i).getContents());
-                person.setPhoneNumber(sheet.getCell(1, i).getContents());
-                person.setMsgContent(sheet.getCell(2, i).getContents());
-                persons.add(person);
-            }
-            workbook.close();
-        } catch (Exception e) {
-            Log.d(TAG, "数据读取错误=" + e);
+    private ArrayList<Person> getXlsData(final String filePath, final int index) {
+        final ArrayList<Person> persons = new ArrayList<>();
+        if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(MainActivity.this,
+                    new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, 1);
+
+        } else {
+
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    File file = new File(filePath);
+                    if (!file.exists()) {
+                        Looper.prepare();
+                        Toast.makeText(MainActivity.this,"要读取的文件不存在",Toast.LENGTH_SHORT).show();
+                        Looper.loop();
+                    } else {
+                        try {
+                            InputStream is = new FileInputStream(filePath);
+                            Workbook workbook = Workbook.getWorkbook(is);
+                            Sheet sheet = workbook.getSheet(index);
+                            int sheetRows = sheet.getRows();
+                            for (int i = 0; i < sheetRows; i++) {
+                                Person person = new Person();
+                                person.setUserName(sheet.getCell(0, i).getContents());
+                                person.setPhoneNumber(sheet.getCell(1, i).getContents());
+                                person.setMsgContent(sheet.getCell(2, i).getContents());
+                                persons.add(person);
+                            }
+
+                            workbook.close();
+                        } catch (Exception e) {
+                            Log.d(TAG, "数据读取错误=" + e);
+                        }
+                    }
+                }
+
+            }).start();
         }
         return persons;
     }
